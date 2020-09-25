@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "994746145108",
+    "firebase_url": "https://silicon-amulet-290216.firebaseio.com",
+    "project_id": "silicon-amulet-290216",
+    "storage_bucket": "silicon-amulet-290216.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:994746145108:android:5b452a7e273913fe1850c1",
+        "android_client_info": {
+          "package_name": "com.example.radmapv2"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "994746145108-nstjgurkv828ql6rps82siddusjb36fj.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDmQvnLgk1iF0DEU8pXCzT0cFGFnbO2Njs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "994746145108-nstjgurkv828ql6rps82siddusjb36fj.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -12,6 +12,7 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
 import android.location.Location;
@@ -32,10 +33,14 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.TileOverlay;
+import com.google.android.gms.maps.model.TileOverlayOptions;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -45,14 +50,19 @@ import java.util.Set;
 
 import com.google.maps.android.clustering.ClusterManager;
 import com.google.maps.android.clustering.Cluster;
+import com.google.maps.android.heatmaps.Gradient;
+import com.google.maps.android.heatmaps.HeatmapTileProvider;
+import com.google.maps.android.heatmaps.WeightedLatLng;
 
 //public class MainActivity extends FragmentActivity implements OnMapReadyCallback {
-public class MainActivity extends AppCompatActivity{
+public class MainActivity extends AppCompatActivity {
 
-    FusedLocationProviderClient client;                 //Usuario APP
-    SupportMapFragment mapFragment;                     //Fragment para el Mapa
-    private ClusterManager<MyItem> mClusterManager;     //Cluster para marcadores
-    Map<String, Antena> AntenasG = new HashMap<>();     //Mapa de antenas
+    FusedLocationProviderClient client;                                //Usuario APP
+    SupportMapFragment mapFragment;                                    //Fragment para el Mapa
+    private ClusterManager<MyItem> mClusterManager;                    //Cluster para marcadores
+    private List<WeightedLatLng> latLngs = new ArrayList<>();         //Lista para latitudes y longitudes del HeatMap
+    private List<PositionToIntensity> intensity = new ArrayList<>();   //Lista para latitudes y longitudes del HeatMap
+    Map<String, Antena> AntenasG = new HashMap<>();                    //Mapa de antenas
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,8 +78,8 @@ public class MainActivity extends AppCompatActivity{
 
         //Se verifican permisos
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                //Se llama el metodo que obtiene la ubicación actual y llena los clustes de marcadores
-                getCurrentLocation();
+            //Se llama el metodo que obtiene la ubicación actual y llena los clustes de marcadores
+            getCurrentLocation();
         } else {
             ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 44);
         }
@@ -85,7 +95,7 @@ public class MainActivity extends AppCompatActivity{
         task.addOnSuccessListener(new OnSuccessListener<Location>() {
             @Override
             public void onSuccess(final Location location) {
-                if (location != null){
+                if (location != null) {
                     mapFragment.getMapAsync(new OnMapReadyCallback() {
                         @Override
                         public void onMapReady(GoogleMap googleMap) {
@@ -95,9 +105,16 @@ public class MainActivity extends AppCompatActivity{
                                 @Override
                                 public void DataIsLoaded(Map<String, Antena> antenas) {
                                     //Cuando se cargan los datos completamente de la DB a la APP se mueve la camara a la ubicación del usuario
-                                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 13));
+                                    //googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 13));
+                                    googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(4.7103, -74.0322), 17));
                                     //Se llena la variable global con los datos de las antenas
                                     AntenasG = antenas;
+                                    if (AntenasG != null) {
+                                        AntenasG.entrySet().forEach(antenaEntry -> {
+                                            double random_double = Math.random() * (100 - 1 + 1) + 1;
+                                            intensity.add(new PositionToIntensity(antenaEntry.getValue().getLat(), antenaEntry.getValue().getLon(), random_double));
+                                        });
+                                    }
                                 }
 
                                 @Override
@@ -134,15 +151,16 @@ public class MainActivity extends AppCompatActivity{
         });
     }
 
-    private void setUpCluster(GoogleMap googleMap,Map<String, Antena> antenas, Location location, LatLngBounds bounds) {
+    private void setUpCluster(GoogleMap googleMap, Map<String, Antena> antenas, Location location, LatLngBounds bounds) {
 //        googleMap.moveCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(location.getLatitude(), location.getLongitude()), 7));
 
         //Se inicializa el cluster con el contexto del mapa
         mClusterManager = new ClusterManager<MyItem>(this, googleMap);
-        //ClusterRenderer clusterRenderer = new ClusterRenderer(this, googleMap, mClusterManager);
+        ClusterRenderer clusterRenderer = new ClusterRenderer(this, googleMap, mClusterManager);
 
         //Se borran los datos del mapa
         mClusterManager.clearItems();
+        latLngs.clear();
         googleMap.clear();
 
         //googleMap.setOnCameraIdleListener(mClusterManager);
@@ -152,6 +170,18 @@ public class MainActivity extends AppCompatActivity{
         //Añade los items al cluster de marcadores
         addItems(antenas, bounds);
 
+        // Create a heat map tile provider, passing it the latlngs of the police stations.
+        if (latLngs.size() != 0) {
+            HeatmapTileProvider provider = new HeatmapTileProvider.Builder()
+                    .weightedData(latLngs)
+                    //.radius(50)
+                    .build();
+
+            provider.setRadius(150);
+
+            // Add a tile overlay to the map, using the heat map tile provider.
+            googleMap.addTileOverlay(new TileOverlayOptions().tileProvider(provider));
+        }
     }
 
     private void addItems(Map<String, Antena> antenas, LatLngBounds bounds) {
@@ -169,37 +199,45 @@ public class MainActivity extends AppCompatActivity{
                 .distinct()
                 .filter(antena -> checkAntenaInBounds(antena, boundLat, boundLong, boundLat2, boundLong2))
                 .forEach(antena -> {
-//                    MarkerOptions markerOptions = new MarkerOptions()
-//                            .position(new LatLng(antena.getLat(), antena.getLon()))
-//                            //.icon(bitmapDescriptorFromVector(getApplicationContext(),R.drawable.antenna_24));
-//                    MyItem markerItem = new MyItem(markerOptions);
-                    MyItem offsetItem = new MyItem(antena.getLat(), antena.getLon());
-                    mClusterManager.addItem(offsetItem);
+                    MarkerOptions markerOptions = new MarkerOptions()
+                            .position(new LatLng(antena.getLat(), antena.getLon()))
+                            .icon(bitmapDescriptorFromVector(getApplicationContext(), R.drawable.ic_antenna));
+                    MyItem markerItem = new MyItem(markerOptions);
+                    //MyItem offsetItem = new MyItem(antena.getLat(), antena.getLon());
+                    mClusterManager.addItem(markerItem);
+
+                    intensity.stream()
+                            .filter(ints -> antena.getLat().equals(ints.getLat()))
+                            .filter(ints -> antena.getLon().equals(ints.getLon()))
+                            .forEach(ints -> {
+                                latLngs.add(new WeightedLatLng(new LatLng(antena.getLat(), antena.getLon()), ints.getIntens()));
+                            });
+
                 });
         mClusterManager.cluster();
     }
 
-    private boolean checkAntenaInBounds(Antena antena, Double boundLatN, Double boundLongN, Double boundLatS, Double boundLongS){
-            return Double.valueOf(boundLatN) >= antena.getLat() &&
-                   Double.valueOf(boundLatS) <= antena.getLat() &&
-                   Double.valueOf(boundLongN) >= antena.getLon() &&
-                   Double.valueOf(boundLongS) <= antena.getLon();
+    private boolean checkAntenaInBounds(Antena antena, Double boundLatN, Double boundLongN, Double boundLatS, Double boundLongS) {
+        return Double.valueOf(boundLatN) >= antena.getLat() &&
+                Double.valueOf(boundLatS) <= antena.getLat() &&
+                Double.valueOf(boundLongN) >= antena.getLon() &&
+                Double.valueOf(boundLongS) <= antena.getLon();
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == 44){
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED){
-                    getCurrentLocation();
+        if (requestCode == 44) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                getCurrentLocation();
             }
         }
     }
 
-    private BitmapDescriptor bitmapDescriptorFromVector(Context context, int VectorResID){
-        Drawable vectorDrawable = ContextCompat.getDrawable(context,VectorResID);
-        vectorDrawable.setBounds(0,0,vectorDrawable.getIntrinsicWidth(),vectorDrawable.getIntrinsicHeight());
-        Bitmap bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(),vectorDrawable.getIntrinsicHeight(),Bitmap.Config.ARGB_8888);
+    private BitmapDescriptor bitmapDescriptorFromVector(Context context, int VectorResID) {
+        Drawable vectorDrawable = ContextCompat.getDrawable(context, VectorResID);
+        vectorDrawable.setBounds(0, 0, vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight());
+        Bitmap bitmap = Bitmap.createBitmap(vectorDrawable.getIntrinsicWidth(), vectorDrawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         vectorDrawable.draw(canvas);
         return BitmapDescriptorFactory.fromBitmap(bitmap);

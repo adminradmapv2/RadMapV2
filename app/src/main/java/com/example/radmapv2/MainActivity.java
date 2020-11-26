@@ -223,6 +223,7 @@ public class MainActivity extends AppCompatActivity {
                                 LatLng supDer = new LatLng(0,0);
                                 LatLng infIzq = new LatLng(0,0);
                                 LatLng infDer = new LatLng(0,0);
+
                                 for (int i=0; i <= ints.getIntens(); i++) {
                                     switch (ints.getCardp()){
                                         case 'N':
